@@ -78,17 +78,22 @@ def get_args():
         dest='source_folder_name',
         default='',
         required=False)
-    return parser.parse_args()
+
+    args = parser.parse_args()
+    if not (args.to or args.cc or args.bcc):
+        parser.error(
+            'Email requires at least one recepient using --to, --cc, or --bcc')
+    return args
 
 
 def create_message_object(
         sender_address,
-        sender_name,
-        to,
-        cc,
-        bcc,
-        subject,
-        message):
+        message,
+        sender_name=None,
+        to=None,
+        cc=None,
+        bcc=None,
+        subject=None):
     """
     Create an Message object, msg, by using the provided send parameters.
     """
@@ -105,27 +110,27 @@ def create_message_object(
     return msg
 
 
-def add_attachment_to_message_object(msg, source_file_path):
+def add_attachment_to_message_object(msg, file_path):
     """
     Add source_file_path as an attachment to the message object.
     """
     try:
         complete_record = MIMEBase('application', 'octet-stream')
-        complete_record.set_payload((open(source_file_path, "rb").read()))
+        complete_record.set_payload((open(file_path, "rb").read()))
         encoders.encode_base64(complete_record)
         complete_record.add_header(
             'Content-Disposition',
             'attachment',
-            filename=os.path.basename(source_file_path))
+            filename=os.path.basename(file_path))
         msg.attach(complete_record)
 
         upload_record = MIMEBase('application', 'octet-stream')
-        upload_record.set_payload((open(source_file_path, "rb").read()))
+        upload_record.set_payload((open(file_path, "rb").read()))
         encoders.encode_base64(upload_record)
         upload_record.add_header(
             'Content-Disposition',
             'attachment',
-            filename=os.path.basename(source_file_path))
+            filename=os.path.basename(file_path))
         msg.attach(upload_record)
         return msg
     except Exception as e:
@@ -236,34 +241,36 @@ def main():
         folder_name=source_folder_name, file_name=source_file_name)
 
     shipyard_link = create_shipyard_link()
-    message = add_shipyard_link_to_message(message, shipyard_link)
+    message = add_shipyard_link_to_message(
+        message=message, shipyard_link=shipyard_link)
 
     msg = create_message_object(
-        sender_address,
-        sender_name,
-        to,
-        cc,
-        bcc,
-        subject,
-        message)
+        sender_address=sender_address,
+        message=message,
+        sender_name=sender_name,
+        to=to,
+        cc=cc,
+        bcc=bcc,
+        subject=subject)
 
     if source_file_name:
-        msg = add_attachment_to_message_object(msg, source_full_path)
+        msg = add_attachment_to_message_object(
+            msg=msg, file_path=source_full_path)
 
     if send_method == 'ssl':
         send_ssl_message(
-            smtp_host,
-            smtp_port,
-            sender_address,
-            password,
-            msg)
+            smtp_host=smtp_host,
+            smtp_port=smtp_port,
+            sender_address=sender_address,
+            password=password,
+            msg=msg)
     else:
         send_tls_message(
             smtp_host,
-            smtp_port,
-            sender_address,
-            password,
-            msg)
+            smtp_port=smtp_port,
+            sender_address=sender_address,
+            password=password,
+            msg=msg)
 
 
 if __name__ == '__main__':
