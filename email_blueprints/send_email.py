@@ -154,6 +154,7 @@ def send_tls_message(
         server.login(sender_address, password)
         server.send_message(msg)
         server.quit()
+        print('Message successfully sent.')
     except Exception as e:
         raise(e)
 
@@ -172,6 +173,7 @@ def send_ssl_message(
         with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
             server.login(sender_address, password)
             server.send_message(msg)
+        print('Message successfully sent.')
     except Exception as e:
         raise(e)
 
