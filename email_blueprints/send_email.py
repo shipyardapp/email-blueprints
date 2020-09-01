@@ -2,6 +2,8 @@ import argparse
 import smtplib
 import ssl
 import os
+import glob
+import re
 from email.message import EmailMessage
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -78,6 +80,31 @@ def get_args():
         dest='source_folder_name',
         default='',
         required=False)
+    parser.add_argument(
+        '--conditional-send',
+        dest='conditional_send',
+        default='always',
+        required=False,
+        choices={
+            'file_exists',
+            'file_dne',
+            'always'})
+    parser.add_argument(
+        '--source-file-name-match-type',
+        dest='source_file_name_match_type',
+        default='exact_match',
+        choices={
+            'exact_match',
+            'regex_match'},
+        required=False)
+    parser.add_argument(
+        '--file-upload',
+        dest='file_upload',
+        default='no',
+        required=True,
+        choices={
+            'yes',
+            'no'})
 
     args = parser.parse_args()
     if not (args.to or args.cc or args.bcc):
@@ -115,15 +142,6 @@ def add_attachment_to_message_object(msg, file_path):
     Add source_file_path as an attachment to the message object.
     """
     try:
-        complete_record = MIMEBase('application', 'octet-stream')
-        complete_record.set_payload((open(file_path, "rb").read()))
-        encoders.encode_base64(complete_record)
-        complete_record.add_header(
-            'Content-Disposition',
-            'attachment',
-            filename=os.path.basename(file_path))
-        msg.attach(complete_record)
-
         upload_record = MIMEBase('application', 'octet-stream')
         upload_record.set_payload((open(file_path, "rb").read()))
         encoders.encode_base64(upload_record)
@@ -223,6 +241,83 @@ def add_shipyard_link_to_message(message, shipyard_link):
     return message
 
 
+def determine_file_to_upload(
+        source_file_name_match_type,
+        source_folder_name,
+        source_file_name):
+    """
+    Determine whether the file name being uploaded to email
+    will be named archive_file_name or will be the source_file_name provided.
+    """
+    if source_file_name_match_type == 'regex_match':
+        file_names = find_all_local_file_names(source_folder_name)
+        matching_file_names = find_all_file_matches(
+            file_names, re.compile(source_file_name))
+
+        files_to_upload = matching_file_names
+    else:
+        source_full_path = combine_folder_and_file_name(
+            folder_name=source_folder_name, file_name=source_file_name)
+        files_to_upload = [source_full_path]
+    return files_to_upload
+
+
+def find_all_local_file_names(source_folder_name):
+    """
+    Returns a list of all files that exist in the current working directory,
+    filtered by source_folder_name if provided.
+    """
+    cwd = os.getcwd()
+    cwd_extension = os.path.normpath(f'{cwd}/{source_folder_name}/**')
+    file_names = glob.glob(cwd_extension, recursive=True)
+    return file_names
+
+
+def find_all_file_matches(file_names, file_name_re):
+    """
+    Return a list of all file_names that matched the regular expression.
+    """
+    matching_file_names = []
+    for file in file_names:
+        if re.search(file_name_re, file):
+            matching_file_names.append(file)
+
+    return matching_file_names
+
+
+def should_message_be_sent(
+        conditional_send,
+        source_folder_name,
+        source_file_name,
+        source_file_name_match_type):
+    """
+    Determine if an email message should be sent based on the parameters provided.
+    """
+
+    source_full_path = combine_folder_and_file_name(
+        source_folder_name, source_file_name)
+
+    if source_file_name_match_type == 'exact_match':
+        if (
+            conditional_send == 'file_exists' and os.path.exists(source_full_path)) or (
+            conditional_send == 'file_dne' and not os.path.exists(source_full_path)) or (
+                conditional_send == 'always'):
+            return True
+        else:
+            return False
+    if source_file_name_match_type == 'regex_match':
+        file_names = find_all_local_file_names(source_folder_name)
+        matching_file_names = find_all_file_matches(
+            file_names, re.compile(source_file_name))
+        if (
+            conditional_send == 'file_exists' and len(matching_file_names) > 0) or (
+                conditional_send == 'file_dne' and len(matching_file_names) == 0) or (
+                    conditional_send == 'always'):
+            return True
+        else:
+            return False
+
+
 def main():
     args = get_args()
     send_method = args.send_method
@@ -236,43 +331,63 @@ def main():
     password = args.password
     subject = args.subject
     message = args.message
+    conditional_send = args.conditional_send
+    source_file_name_match_type = args.source_file_name_match_type
+    file_upload = args.file_upload
 
     source_file_name = args.source_file_name
     source_folder_name = clean_folder_name(args.source_folder_name)
     source_full_path = combine_folder_and_file_name(
         folder_name=source_folder_name, file_name=source_file_name)
 
-    shipyard_link = create_shipyard_link()
-    message = add_shipyard_link_to_message(
-        message=message, shipyard_link=shipyard_link)
+    if should_message_be_sent(
+            conditional_send,
+            source_folder_name,
+            source_file_name,
+            source_file_name_match_type):
 
-    msg = create_message_object(
-        sender_address=sender_address,
-        message=message,
-        sender_name=sender_name,
-        to=to,
-        cc=cc,
-        bcc=bcc,
-        subject=subject)
+        shipyard_link = create_shipyard_link()
+        message = add_shipyard_link_to_message(
+            message=message, shipyard_link=shipyard_link)
 
-    if source_file_name:
-        msg = add_attachment_to_message_object(
-            msg=msg, file_path=source_full_path)
-
-    if send_method == 'ssl':
-        send_ssl_message(
-            smtp_host=smtp_host,
-            smtp_port=smtp_port,
+        msg = create_message_object(
             sender_address=sender_address,
-            password=password,
-            msg=msg)
+            message=message,
+            sender_name=sender_name,
+            to=to,
+            cc=cc,
+            bcc=bcc,
+            subject=subject)
+
+        if file_upload == 'yes':
+            files_to_upload = determine_file_to_upload(
+                source_file_name_match_type=source_file_name_match_type,
+                source_folder_name=source_folder_name,
+                source_file_name=source_file_name)
+            for file in files_to_upload:
+                msg = add_attachment_to_message_object(
+                    msg=msg, file_path=file)
+
+        if send_method == 'ssl':
+            send_ssl_message(
+                smtp_host=smtp_host,
+                smtp_port=smtp_port,
+                sender_address=sender_address,
+                password=password,
+                msg=msg)
+        else:
+            send_tls_message(
+                smtp_host,
+                smtp_port=smtp_port,
+                sender_address=sender_address,
+                password=password,
+                msg=msg)
     else:
-        send_tls_message(
-            smtp_host,
-            smtp_port=smtp_port,
-            sender_address=sender_address,
-            password=password,
-            msg=msg)
+        if conditional_send == 'file_exists':
+            print('File(s) could not be found. Message not sent.')
+        if conditional_send == 'file_dne':
+            print(
+                'File(s) were found, but message was conditional based on file not existing. Message not sent.')
 
 
 if __name__ == '__main__':
