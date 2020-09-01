@@ -4,6 +4,7 @@ import ssl
 import os
 import glob
 import re
+import urllib.parse
 from email.message import EmailMessage
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -226,13 +227,13 @@ def create_shipyard_link():
     vessel_id = os.environ.get('SHIPYARD_VESSEL_ID')
     log_id = os.environ.get('SHIPYARD_LOG_ID')
 
-    print(org_name)
-    print(project_id)
-    print(vessel_id)
-    print(log_id)
+    if org_name:
+        org_name.replace(' ', '%20')
 
     if project_id and vessel_id and log_id:
-        shipyard_link = f'https://app.shipyardapp.com/{org_name}/projects/{project_id}/vessels/{vessel_id}/logs/{log_id}'
+        dynamic_link_section = urllib.parse.quote(
+            f'{org_name}/projects/{project_id}/vessels/{vessel_id}/logs/{log_id}')
+        shipyard_link = f'https://app.shipyardapp.com/{dynamic_link_section}'
         print(shipyard_link)
     else:
         shipyard_link = 'https://www.shipyardapp.com'
