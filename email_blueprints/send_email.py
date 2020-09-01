@@ -227,9 +227,6 @@ def create_shipyard_link():
     vessel_id = os.environ.get('SHIPYARD_VESSEL_ID')
     log_id = os.environ.get('SHIPYARD_LOG_ID')
 
-    if org_name:
-        org_name.replace(' ', '%20')
-
     if project_id and vessel_id and log_id:
         dynamic_link_section = urllib.parse.quote(
             f'{org_name}/projects/{project_id}/vessels/{vessel_id}/logs/{log_id}')
