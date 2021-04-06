@@ -57,6 +57,11 @@ def get_args():
         default='',
         required=False)
     parser.add_argument(
+        '--username',
+        dest='username',
+        default='',
+        required=False)
+    parser.add_argument(
         '--password',
         dest='password',
         default='',
@@ -160,7 +165,7 @@ def add_attachment_to_message_object(msg, file_path):
 def send_tls_message(
         smtp_host,
         smtp_port,
-        sender_address,
+        username,
         password,
         msg):
     """
@@ -170,7 +175,7 @@ def send_tls_message(
     try:
         server = smtplib.SMTP(smtp_host, smtp_port)
         server.starttls(context=context)
-        server.login(sender_address, password)
+        server.login(username, password)
         server.send_message(msg)
         server.quit()
         print('Message successfully sent.')
@@ -181,7 +186,7 @@ def send_tls_message(
 def send_ssl_message(
         smtp_host,
         smtp_port,
-        sender_address,
+        username,
         password,
         msg):
     """
@@ -190,7 +195,7 @@ def send_ssl_message(
     context = ssl.create_default_context()
     try:
         with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
-            server.login(sender_address, password)
+            server.login(username, password)
             server.send_message(msg)
         print('Message successfully sent.')
     except Exception as e:
@@ -331,12 +336,16 @@ def main():
     to = args.to
     cc = args.cc
     bcc = args.bcc
+    username = args.username
     password = args.password
     subject = args.subject
     message = args.message
     conditional_send = args.conditional_send
     source_file_name_match_type = args.source_file_name_match_type
     file_upload = args.file_upload
+
+    if not username:
+        username = sender_address
 
     source_file_name = args.source_file_name
     source_folder_name = clean_folder_name(args.source_folder_name)
@@ -375,14 +384,14 @@ def main():
             send_ssl_message(
                 smtp_host=smtp_host,
                 smtp_port=smtp_port,
-                sender_address=sender_address,
+                username=username,
                 password=password,
                 msg=msg)
         else:
             send_tls_message(
                 smtp_host,
                 smtp_port=smtp_port,
-                sender_address=sender_address,
+                username=username,
                 password=password,
                 msg=msg)
     else:
