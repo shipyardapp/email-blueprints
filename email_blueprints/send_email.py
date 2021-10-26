@@ -111,12 +111,32 @@ def get_args():
         choices={
             'yes',
             'no'})
+    parser.add_argument(
+        '--include-shipyard-footer',
+        dest='include_shipyard_footer',
+        default='TRUE',
+        choices={
+            'TRUE',
+            'FALSE'},
+        required=False)
 
     args = parser.parse_args()
     if not (args.to or args.cc or args.bcc):
         parser.error(
             'Email requires at least one recepient using --to, --cc, or --bcc')
     return args
+
+
+def convert_to_boolean(string):
+    """
+    Shipyard can't support passing Booleans to code, so we have to convert
+    string values to their boolean values.
+    """
+    if string in ['True', 'true', 'TRUE']:
+        value = True
+    else:
+        value = False
+    return value
 
 
 def create_message_object(
@@ -343,6 +363,7 @@ def main():
     conditional_send = args.conditional_send
     source_file_name_match_type = args.source_file_name_match_type
     file_upload = args.file_upload
+    include_shipyard_footer = convert_to_boolean(args.include_shipyard_footer)
 
     if not username:
         username = sender_address
@@ -358,9 +379,10 @@ def main():
             source_file_name,
             source_file_name_match_type):
 
-        shipyard_link = create_shipyard_link()
-        message = add_shipyard_link_to_message(
-            message=message, shipyard_link=shipyard_link)
+        if include_shipyard_footer:
+            shipyard_link = create_shipyard_link()
+            message = add_shipyard_link_to_message(
+                message=message, shipyard_link=shipyard_link)
 
         msg = create_message_object(
             sender_address=sender_address,
