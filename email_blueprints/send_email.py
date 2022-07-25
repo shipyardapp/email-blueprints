@@ -167,7 +167,7 @@ def add_attachment_to_message_object(msg, file_path):
         msg.attach(upload_record)
         return msg
     except Exception as e:
-        raise(e)
+        print(e)
         print("Could not attach the files to the email.")
 
 
@@ -302,8 +302,6 @@ def main():
     source_file_name = args.source_file_name
     source_folder_name = shipyard.files.clean_folder_name(
         args.source_folder_name)
-    source_full_path = shipyard.files.combine_folder_and_file_name(
-        folder_name=source_folder_name, file_name=source_file_name)
 
     if should_message_be_sent(
             conditional_send,
