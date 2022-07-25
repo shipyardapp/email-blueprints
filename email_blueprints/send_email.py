@@ -227,7 +227,7 @@ def determine_file_to_upload(
     Determine whether the file name being uploaded to email
     will be named archive_file_name or will be the source_file_name provided.
     """
-    print(f'the source_file_name_match_type is {source_file_name_match_type}')
+
     if source_file_name_match_type == 'regex_match':
         file_names = shipyard.files.find_all_local_file_names(
             source_folder_name)
@@ -235,7 +235,6 @@ def determine_file_to_upload(
             file_names, re.compile(source_file_name))
 
         files_to_upload = matching_file_names
-        print(files_to_upload)
     else:
         source_full_path = shipyard.files.combine_folder_and_file_name(
             folder_name=source_folder_name, file_name=source_file_name)
@@ -254,7 +253,6 @@ def should_message_be_sent(
 
     source_full_path = shipyard.files.combine_folder_and_file_name(
         source_folder_name, source_file_name)
-    print(f'should message be sent {source_file_name_match_type}')
 
     if source_file_name_match_type == 'exact_match':
         if (
@@ -297,8 +295,6 @@ def main():
     file_upload = args.file_upload
     include_shipyard_footer = shipyard.args.convert_to_boolean(
         args.include_shipyard_footer)
-
-    print(f'the arg is {source_file_name_match_type}')
 
     if not username:
         username = sender_address
