@@ -254,6 +254,7 @@ def should_message_be_sent(
 
     source_full_path = shipyard.files.combine_folder_and_file_name(
         source_folder_name, source_file_name)
+    print(f'should message be sent {source_file_name_match_type}')
 
     if source_file_name_match_type == 'exact_match':
         if (
