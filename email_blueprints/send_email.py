@@ -128,18 +128,6 @@ def get_args():
     return args
 
 
-def convert_to_boolean(string):
-    """
-    Shipyard can't support passing Booleans to code, so we have to convert
-    string values to their boolean values.
-    """
-    if string in ['True', 'true', 'TRUE']:
-        value = True
-    else:
-        value = False
-    return value
-
-
 def create_message_object(
         sender_address,
         message,
@@ -223,45 +211,6 @@ def send_ssl_message(
         raise(e)
 
 
-def clean_folder_name(folder_name):
-    """
-    Cleans folders name by removing duplicate '/' as well as leading and trailing '/' characters.
-    """
-    folder_name = folder_name.strip('/')
-    if folder_name != '':
-        folder_name = os.path.normpath(folder_name)
-    return folder_name
-
-
-def combine_folder_and_file_name(folder_name, file_name):
-    """
-    Combine together the provided folder_name and file_name into one path variable.
-    """
-    combined_name = os.path.normpath(
-        f'{folder_name}{"/" if folder_name else ""}{file_name}')
-    combined_name = os.path.normpath(combined_name)
-
-    return combined_name
-
-
-def create_shipyard_link():
-    """
-    Create a link back to the Shipyard log page for the current alert.
-    """
-    org_name = os.environ.get('SHIPYARD_ORG_NAME')
-    project_id = os.environ.get('SHIPYARD_PROJECT_ID')
-    vessel_id = os.environ.get('SHIPYARD_VESSEL_ID')
-    log_id = os.environ.get('SHIPYARD_LOG_ID')
-
-    if project_id and vessel_id and log_id:
-        dynamic_link_section = urllib.parse.quote(
-            f'{org_name}/projects/{project_id}/vessels/{vessel_id}/logs/{log_id}')
-        shipyard_link = f'https://app.shipyardapp.com/{dynamic_link_section}'
-    else:
-        shipyard_link = 'https://www.shipyardapp.com'
-    return shipyard_link
-
-
 def add_shipyard_link_to_message(message, shipyard_link):
     """
     Create a "signature" at the bottom of the email that links back to Shipyard.
@@ -278,40 +227,20 @@ def determine_file_to_upload(
     Determine whether the file name being uploaded to email
     will be named archive_file_name or will be the source_file_name provided.
     """
+    print(f'the source_file_name_match_type is {source_file_name_match_type}')
     if source_file_name_match_type == 'regex_match':
-        file_names = find_all_local_file_names(source_folder_name)
-        matching_file_names = find_all_file_matches(
+        file_names = shipyard.files.find_all_local_file_names(
+            source_folder_name)
+        matching_file_names = shipyard.files.find_all_file_matches(
             file_names, re.compile(source_file_name))
 
         files_to_upload = matching_file_names
+        print(files_to_upload)
     else:
-        source_full_path = combine_folder_and_file_name(
+        source_full_path = shipyard.files.combine_folder_and_file_name(
             folder_name=source_folder_name, file_name=source_file_name)
         files_to_upload = [source_full_path]
     return files_to_upload
-
-
-def find_all_local_file_names(source_folder_name):
-    """
-    Returns a list of all files that exist in the current working directory,
-    filtered by source_folder_name if provided.
-    """
-    cwd = os.getcwd()
-    cwd_extension = os.path.normpath(f'{cwd}/{source_folder_name}/**')
-    file_names = glob.glob(cwd_extension, recursive=True)
-    return file_names
-
-
-def find_all_file_matches(file_names, file_name_re):
-    """
-    Return a list of all file_names that matched the regular expression.
-    """
-    matching_file_names = []
-    for file in file_names:
-        if re.search(file_name_re, file):
-            matching_file_names.append(file)
-
-    return matching_file_names
 
 
 def should_message_be_sent(
@@ -323,7 +252,7 @@ def should_message_be_sent(
     Determine if an email message should be sent based on the parameters provided.
     """
 
-    source_full_path = combine_folder_and_file_name(
+    source_full_path = shipyard.files.combine_folder_and_file_name(
         source_folder_name, source_file_name)
 
     if source_file_name_match_type == 'exact_match':
@@ -334,9 +263,10 @@ def should_message_be_sent(
             return True
         else:
             return False
-    if source_file_name_match_type == 'regex_match':
-        file_names = find_all_local_file_names(source_folder_name)
-        matching_file_names = find_all_file_matches(
+    elif source_file_name_match_type == 'regex_match':
+        file_names = shipyard.files.find_all_local_file_names(
+            source_folder_name)
+        matching_file_names = shipyard.files.find_all_file_matches(
             file_names, re.compile(source_file_name))
         if (
             conditional_send == 'file_exists' and len(matching_file_names) > 0) or (
@@ -364,14 +294,16 @@ def main():
     conditional_send = args.conditional_send
     source_file_name_match_type = args.source_file_name_match_type
     file_upload = args.file_upload
-    include_shipyard_footer = convert_to_boolean(args.include_shipyard_footer)
+    include_shipyard_footer = shipyard.args.convert_to_boolean(
+        args.include_shipyard_footer)
 
     if not username:
         username = sender_address
 
     source_file_name = args.source_file_name
-    source_folder_name = clean_folder_name(args.source_folder_name)
-    source_full_path = combine_folder_and_file_name(
+    source_folder_name = shipyard.files.clean_folder_name(
+        args.source_folder_name)
+    source_full_path = shipyard.files.combine_folder_and_file_name(
         folder_name=source_folder_name, file_name=source_file_name)
 
     if should_message_be_sent(
@@ -381,7 +313,7 @@ def main():
             source_file_name_match_type):
 
         if include_shipyard_footer:
-            shipyard_link = create_shipyard_link()
+            shipyard_link = shipyard.args.create_shipyard_link()
             message = add_shipyard_link_to_message(
                 message=message, shipyard_link=shipyard_link)
 
