@@ -298,6 +298,8 @@ def main():
     include_shipyard_footer = shipyard.args.convert_to_boolean(
         args.include_shipyard_footer)
 
+    print(f'the arg is {source_file_name_match_type}')
+
     if not username:
         username = sender_address
 
