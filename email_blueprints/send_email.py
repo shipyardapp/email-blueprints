@@ -2,9 +2,7 @@ import argparse
 import smtplib
 import ssl
 import os
-import glob
 import re
-import urllib.parse
 from email.message import EmailMessage
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -244,32 +242,26 @@ def determine_file_to_upload(
 
 def should_message_be_sent(
         conditional_send,
-        source_folder_name,
-        source_file_name,
+        source_full_path,
         source_file_name_match_type):
     """
     Determine if an email message should be sent based on the parameters provided.
     """
 
-    source_full_path = shipyard.files.combine_folder_and_file_name(
-        source_folder_name, source_file_name)
-
     if source_file_name_match_type == 'exact_match':
         if (
-            conditional_send == 'file_exists' and os.path.exists(source_full_path)) or (
-            conditional_send == 'file_dne' and not os.path.exists(source_full_path)) or (
+                conditional_send == 'file_exists' and os.path.exists(
+                    source_full_path[0])) or (
+                conditional_send == 'file_dne' and not os.path.exists(
+                    source_full_path[0])) or (
                 conditional_send == 'always'):
             return True
         else:
             return False
     elif source_file_name_match_type == 'regex_match':
-        file_names = shipyard.files.find_all_local_file_names(
-            source_folder_name)
-        matching_file_names = shipyard.files.find_all_file_matches(
-            file_names, re.compile(source_file_name))
         if (
-            conditional_send == 'file_exists' and len(matching_file_names) > 0) or (
-                conditional_send == 'file_dne' and len(matching_file_names) == 0) or (
+            conditional_send == 'file_exists' and len(source_full_path) > 0) or (
+                conditional_send == 'file_dne' and len(source_full_path) == 0) or (
                     conditional_send == 'always'):
             return True
         else:
@@ -303,10 +295,14 @@ def main():
     source_folder_name = shipyard.files.clean_folder_name(
         args.source_folder_name)
 
+    file_paths = determine_file_to_upload(
+        source_file_name_match_type=source_file_name_match_type,
+        source_folder_name=source_folder_name,
+        source_file_name=source_file_name)
+
     if should_message_be_sent(
             conditional_send,
-            source_folder_name,
-            source_file_name,
+            file_paths,
             source_file_name_match_type):
 
         if include_shipyard_footer:
@@ -324,13 +320,21 @@ def main():
             subject=subject)
 
         if file_upload == 'yes':
-            files_to_upload = determine_file_to_upload(
-                source_file_name_match_type=source_file_name_match_type,
-                source_folder_name=source_folder_name,
-                source_file_name=source_file_name)
-            for file in files_to_upload:
+
+            if shipyard.files.are_files_too_large(
+                    file_paths, max_size_bytes=10000000):
+                compressed_file_name = shipyard.files.compress_files(
+                    file_paths,
+                    destination_full_path='Archive.zip',
+                    compression='zip')
+                print(f'Attaching {compressed_file_name} to message.')
                 msg = add_attachment_to_message_object(
-                    msg=msg, file_path=file)
+                    msg=msg, file_path=compressed_file_name)
+            else:
+                for file in file_paths:
+                    print(f'Attaching {file} to message.')
+                    msg = add_attachment_to_message_object(
+                        msg=msg, file_path=file)
 
         if send_method == 'ssl':
             send_ssl_message(
