@@ -2,14 +2,13 @@ import argparse
 import smtplib
 import ssl
 import os
-import glob
 import re
-import urllib.parse
 from email.message import EmailMessage
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email import encoders
+import shipyard_utils as shipyard
 
 
 def get_args():
@@ -127,18 +126,6 @@ def get_args():
     return args
 
 
-def convert_to_boolean(string):
-    """
-    Shipyard can't support passing Booleans to code, so we have to convert
-    string values to their boolean values.
-    """
-    if string in ['True', 'true', 'TRUE']:
-        value = True
-    else:
-        value = False
-    return value
-
-
 def create_message_object(
         sender_address,
         message,
@@ -178,7 +165,7 @@ def add_attachment_to_message_object(msg, file_path):
         msg.attach(upload_record)
         return msg
     except Exception as e:
-        raise(e)
+        print(e)
         print("Could not attach the files to the email.")
 
 
@@ -222,45 +209,6 @@ def send_ssl_message(
         raise(e)
 
 
-def clean_folder_name(folder_name):
-    """
-    Cleans folders name by removing duplicate '/' as well as leading and trailing '/' characters.
-    """
-    folder_name = folder_name.strip('/')
-    if folder_name != '':
-        folder_name = os.path.normpath(folder_name)
-    return folder_name
-
-
-def combine_folder_and_file_name(folder_name, file_name):
-    """
-    Combine together the provided folder_name and file_name into one path variable.
-    """
-    combined_name = os.path.normpath(
-        f'{folder_name}{"/" if folder_name else ""}{file_name}')
-    combined_name = os.path.normpath(combined_name)
-
-    return combined_name
-
-
-def create_shipyard_link():
-    """
-    Create a link back to the Shipyard log page for the current alert.
-    """
-    org_name = os.environ.get('SHIPYARD_ORG_NAME')
-    project_id = os.environ.get('SHIPYARD_PROJECT_ID')
-    vessel_id = os.environ.get('SHIPYARD_VESSEL_ID')
-    log_id = os.environ.get('SHIPYARD_LOG_ID')
-
-    if project_id and vessel_id and log_id:
-        dynamic_link_section = urllib.parse.quote(
-            f'{org_name}/projects/{project_id}/vessels/{vessel_id}/logs/{log_id}')
-        shipyard_link = f'https://app.shipyardapp.com/{dynamic_link_section}'
-    else:
-        shipyard_link = 'https://www.shipyardapp.com'
-    return shipyard_link
-
-
 def add_shipyard_link_to_message(message, shipyard_link):
     """
     Create a "signature" at the bottom of the email that links back to Shipyard.
@@ -277,69 +225,43 @@ def determine_file_to_upload(
     Determine whether the file name being uploaded to email
     will be named archive_file_name or will be the source_file_name provided.
     """
+
     if source_file_name_match_type == 'regex_match':
-        file_names = find_all_local_file_names(source_folder_name)
-        matching_file_names = find_all_file_matches(
+        file_names = shipyard.files.find_all_local_file_names(
+            source_folder_name)
+        matching_file_names = shipyard.files.find_all_file_matches(
             file_names, re.compile(source_file_name))
 
         files_to_upload = matching_file_names
     else:
-        source_full_path = combine_folder_and_file_name(
+        source_full_path = shipyard.files.combine_folder_and_file_name(
             folder_name=source_folder_name, file_name=source_file_name)
         files_to_upload = [source_full_path]
     return files_to_upload
 
 
-def find_all_local_file_names(source_folder_name):
-    """
-    Returns a list of all files that exist in the current working directory,
-    filtered by source_folder_name if provided.
-    """
-    cwd = os.getcwd()
-    cwd_extension = os.path.normpath(f'{cwd}/{source_folder_name}/**')
-    file_names = glob.glob(cwd_extension, recursive=True)
-    return file_names
-
-
-def find_all_file_matches(file_names, file_name_re):
-    """
-    Return a list of all file_names that matched the regular expression.
-    """
-    matching_file_names = []
-    for file in file_names:
-        if re.search(file_name_re, file):
-            matching_file_names.append(file)
-
-    return matching_file_names
-
-
 def should_message_be_sent(
         conditional_send,
-        source_folder_name,
-        source_file_name,
+        source_full_path,
         source_file_name_match_type):
     """
     Determine if an email message should be sent based on the parameters provided.
     """
 
-    source_full_path = combine_folder_and_file_name(
-        source_folder_name, source_file_name)
-
     if source_file_name_match_type == 'exact_match':
         if (
-            conditional_send == 'file_exists' and os.path.exists(source_full_path)) or (
-            conditional_send == 'file_dne' and not os.path.exists(source_full_path)) or (
+                conditional_send == 'file_exists' and os.path.exists(
+                    source_full_path[0])) or (
+                conditional_send == 'file_dne' and not os.path.exists(
+                    source_full_path[0])) or (
                 conditional_send == 'always'):
             return True
         else:
             return False
-    if source_file_name_match_type == 'regex_match':
-        file_names = find_all_local_file_names(source_folder_name)
-        matching_file_names = find_all_file_matches(
-            file_names, re.compile(source_file_name))
+    elif source_file_name_match_type == 'regex_match':
         if (
-            conditional_send == 'file_exists' and len(matching_file_names) > 0) or (
-                conditional_send == 'file_dne' and len(matching_file_names) == 0) or (
+            conditional_send == 'file_exists' and len(source_full_path) > 0) or (
+                conditional_send == 'file_dne' and len(source_full_path) == 0) or (
                     conditional_send == 'always'):
             return True
         else:
@@ -363,24 +285,28 @@ def main():
     conditional_send = args.conditional_send
     source_file_name_match_type = args.source_file_name_match_type
     file_upload = args.file_upload
-    include_shipyard_footer = convert_to_boolean(args.include_shipyard_footer)
+    include_shipyard_footer = shipyard.args.convert_to_boolean(
+        args.include_shipyard_footer)
 
     if not username:
         username = sender_address
 
     source_file_name = args.source_file_name
-    source_folder_name = clean_folder_name(args.source_folder_name)
-    source_full_path = combine_folder_and_file_name(
-        folder_name=source_folder_name, file_name=source_file_name)
+    source_folder_name = shipyard.files.clean_folder_name(
+        args.source_folder_name)
+
+    file_paths = determine_file_to_upload(
+        source_file_name_match_type=source_file_name_match_type,
+        source_folder_name=source_folder_name,
+        source_file_name=source_file_name)
 
     if should_message_be_sent(
             conditional_send,
-            source_folder_name,
-            source_file_name,
+            file_paths,
             source_file_name_match_type):
 
         if include_shipyard_footer:
-            shipyard_link = create_shipyard_link()
+            shipyard_link = shipyard.args.create_shipyard_link()
             message = add_shipyard_link_to_message(
                 message=message, shipyard_link=shipyard_link)
 
@@ -394,13 +320,21 @@ def main():
             subject=subject)
 
         if file_upload == 'yes':
-            files_to_upload = determine_file_to_upload(
-                source_file_name_match_type=source_file_name_match_type,
-                source_folder_name=source_folder_name,
-                source_file_name=source_file_name)
-            for file in files_to_upload:
+
+            if shipyard.files.are_files_too_large(
+                    file_paths, max_size_bytes=10000000):
+                compressed_file_name = shipyard.files.compress_files(
+                    file_paths,
+                    destination_full_path='Archive.zip',
+                    compression='zip')
+                print(f'Attaching {compressed_file_name} to message.')
                 msg = add_attachment_to_message_object(
-                    msg=msg, file_path=file)
+                    msg=msg, file_path=compressed_file_name)
+            else:
+                for file in file_paths:
+                    print(f'Attaching {file} to message.')
+                    msg = add_attachment_to_message_object(
+                        msg=msg, file_path=file)
 
         if send_method == 'ssl':
             send_ssl_message(
