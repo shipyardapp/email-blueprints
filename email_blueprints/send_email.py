@@ -145,7 +145,11 @@ def _extract_file(message:str) -> str:
     pattern = r'\{\{[^\{\}]+\}\}'
     res = re.search(pattern,message).group()
     file_pattern = re.compile(r'[{}]+')
-    return re.sub(file_pattern, '', res)
+    text = re.sub(file_pattern, '', res)
+    split = re.split("^text:", text) # will be a list of two
+    
+    # return re.sub(file_pattern, '', res)
+    return split[1]
 
 def _read_file(file:str, message:str) -> str:
     try:
