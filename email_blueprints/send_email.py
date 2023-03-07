@@ -157,17 +157,17 @@ def create_message_object(
     """
     Create an Message object, msg, by using the provided send parameters.
     """        
-    if _has_file(message):
-        file = _extract_file(message)
-        try:
-            with open(file, 'r') as f:
-                content = f.read()
-                f.close()
-        except Exception as e:
-            print(f"Could not load the contents of file {file}. Make sure the file extension is provided")
-            raise(FileNotFoundError)
-        pattern = r'\{\{[^\{\}]+\}\}'
-        message = f"{re.sub(pattern,'',message)} \n {content}"
+    # if _has_file(message):
+    #     file = _extract_file(message)
+    #     try:
+    #         with open(file, 'r') as f:
+    #             content = f.read()
+    #             f.close()
+    #     except Exception as e:
+    #         print(f"Could not load the contents of file {file}. Make sure the file extension is provided")
+    #         raise(FileNotFoundError)
+    #     pattern = r'\{\{[^\{\}]+\}\}'
+    #     message = f"{re.sub(pattern,'',message)} \n {content}"
     msg = MIMEMultipart()
 
     msg['Subject'] = subject
@@ -336,6 +336,18 @@ def main():
             file_paths,
             source_file_name_match_type):
 
+        if _has_file(message):
+            file = _extract_file(message)
+            try:
+                with open(file, 'r') as f:
+                    content = f.read()
+                    f.close()
+            except Exception as e:
+                print(f"Could not load the contents of file {file}. Make sure the file extension is provided")
+                raise(FileNotFoundError)
+            pattern = r'\{\{[^\{\}]+\}\}'
+            message = re.sub('\n','<br>',f"{re.sub(pattern,'',message)} <br><br> {content}")
+        
         if include_shipyard_footer:
             shipyard_link = shipyard.args.create_shipyard_link()
             message = add_shipyard_link_to_message(
