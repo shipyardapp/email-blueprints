@@ -3,6 +3,7 @@ import smtplib
 import ssl
 import os
 import re
+import sys
 from email.message import EmailMessage
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -12,6 +13,7 @@ import shipyard_utils as shipyard
 from tabulate import tabulate
 
 
+EXIT_CODE_INCORRECT_PARAM = 200
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -146,6 +148,9 @@ def _extract_file(message:str) -> str:
     res = re.search(pattern,message).group()
     file_pattern = re.compile(r'[{}]+')
     text = re.sub(file_pattern, '', res)
+    if re.search('^text:',text) is None:
+        print("Error: the parameter needs to be prefixed with text:")
+        sys.exit(EXIT_CODE_INCORRECT_PARAM)
     split = re.split("^text:", text) # will be a list of two
     
     return split[1]
