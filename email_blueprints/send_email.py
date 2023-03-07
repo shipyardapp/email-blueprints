@@ -125,6 +125,26 @@ def get_args():
             'Email requires at least one recepient using --to, --cc, or --bcc')
     return args
 
+def _has_file(message:str) -> bool:
+    """ Returns true if a message string has the {{file.txt}} pattern
+
+    Args:
+        message (str): The message
+
+    Returns:
+        bool: 
+    """
+    pattern = r'\{\{[^\{\}]+\}\}'
+    res = re.search(pattern,message)
+    if res is not None:
+        return True
+    return False
+
+def _extract_file(message:str) -> str:
+    pattern = r'\{\{[^\{\}]+\}\}'
+    res = re.search(pattern,message).group()
+    file_pattern = re.compile(r'[{}]+')
+    return re.sub(file_pattern, '', res)
 
 def create_message_object(
         sender_address,
@@ -136,7 +156,18 @@ def create_message_object(
         subject=None):
     """
     Create an Message object, msg, by using the provided send parameters.
-    """
+    """        
+    if _has_file(message):
+        file = _extract_file(message)
+        try:
+            with open(file, 'r') as f:
+                content = f.read()
+                f.close()
+        except Exception as e:
+            print(f"Could not load the contents of file {file}. Make sure the file extension is provided")
+            raise(FileNotFoundError)
+        pattern = r'\{\{[^\{\}]+\}\}'
+        message = f"{re.sub(pattern,'',message)} \n {content}"
     msg = MIMEMultipart()
 
     msg['Subject'] = subject
