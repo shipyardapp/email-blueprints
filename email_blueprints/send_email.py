@@ -9,6 +9,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email import encoders
 import shipyard_utils as shipyard
+from tabulate import tabulate
 
 
 def get_args():
@@ -146,6 +147,18 @@ def _extract_file(message:str) -> str:
     file_pattern = re.compile(r'[{}]+')
     return re.sub(file_pattern, '', res)
 
+def _read_file(file:str, message:str) -> str:
+    try:
+        with open(file, 'r') as f:
+            content = f.read()
+            f.close()
+    except Exception as e:
+        print(f"Could not load the contents of file {file}. Make sure the file extension is provided")
+        raise(FileNotFoundError)
+    pattern = r'\{\{[^\{\}]+\}\}'
+    msg = re.sub('\n','<br>',f"{re.sub(pattern,'',message)} <br><br> {content}")
+    return msg
+
 def create_message_object(
         sender_address,
         message,
@@ -157,17 +170,6 @@ def create_message_object(
     """
     Create an Message object, msg, by using the provided send parameters.
     """        
-    # if _has_file(message):
-    #     file = _extract_file(message)
-    #     try:
-    #         with open(file, 'r') as f:
-    #             content = f.read()
-    #             f.close()
-    #     except Exception as e:
-    #         print(f"Could not load the contents of file {file}. Make sure the file extension is provided")
-    #         raise(FileNotFoundError)
-    #     pattern = r'\{\{[^\{\}]+\}\}'
-    #     message = f"{re.sub(pattern,'',message)} \n {content}"
     msg = MIMEMultipart()
 
     msg['Subject'] = subject
@@ -338,15 +340,7 @@ def main():
 
         if _has_file(message):
             file = _extract_file(message)
-            try:
-                with open(file, 'r') as f:
-                    content = f.read()
-                    f.close()
-            except Exception as e:
-                print(f"Could not load the contents of file {file}. Make sure the file extension is provided")
-                raise(FileNotFoundError)
-            pattern = r'\{\{[^\{\}]+\}\}'
-            message = re.sub('\n','<br>',f"{re.sub(pattern,'',message)} <br><br> {content}")
+            message = _read_file(file, message)
         
         if include_shipyard_footer:
             shipyard_link = shipyard.args.create_shipyard_link()
