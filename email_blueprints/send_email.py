@@ -12,16 +12,14 @@ from email import encoders
 import shipyard_utils as shipyard
 from tabulate import tabulate
 
-
 EXIT_CODE_INCORRECT_PARAM = 200
+
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--send-method',
         dest='send_method',
-        choices={
-            'ssl',
-            'tls'},
         default='tls',
         required=False)
     parser.add_argument(
@@ -128,7 +126,8 @@ def get_args():
             'Email requires at least one recepient using --to, --cc, or --bcc')
     return args
 
-def _has_file(message:str) -> bool:
+
+def _has_file(message: str) -> bool:
     """ Returns true if a message string has the {{file.txt}} pattern
 
     Args:
@@ -138,34 +137,37 @@ def _has_file(message:str) -> bool:
         bool: 
     """
     pattern = r'\{\{[^\{\}]+\}\}'
-    res = re.search(pattern,message)
+    res = re.search(pattern, message)
     if res is not None:
         return True
     return False
 
-def _extract_file(message:str) -> str:
+
+def _extract_file(message: str) -> str:
     pattern = r'\{\{[^\{\}]+\}\}'
-    res = re.search(pattern,message).group()
+    res = re.search(pattern, message).group()
     file_pattern = re.compile(r'[{}]+')
     text = re.sub(file_pattern, '', res)
-    if re.search('^text:',text) is None:
+    if re.search('^text:', text) is None:
         print("Error: the parameter needs to be prefixed with text:")
         sys.exit(EXIT_CODE_INCORRECT_PARAM)
-    split = re.split("^text:", text) # will be a list of two
-    
+    split = re.split("^text:", text)  # will be a list of two
+
     return split[1]
 
-def _read_file(file:str, message:str) -> str:
+
+def _read_file(file: str, message: str) -> str:
     try:
         with open(file, 'r') as f:
             content = f.read()
             f.close()
     except Exception as e:
         print(f"Could not load the contents of file {file}. Make sure the file extension is provided")
-        raise(FileNotFoundError)
+        raise (FileNotFoundError)
     pattern = r'\{\{[^\{\}]+\}\}'
-    msg = re.sub('\n','<br>',f"{re.sub(pattern,'',message)} <br><br> {content}")
+    msg = re.sub('\n', '<br>', f"{re.sub(pattern, '', message)} <br><br> {content}")
     return msg
+
 
 def create_message_object(
         sender_address,
@@ -177,7 +179,7 @@ def create_message_object(
         subject=None):
     """
     Create an Message object, msg, by using the provided send parameters.
-    """        
+    """
     msg = MIMEMultipart()
 
     msg['Subject'] = subject
@@ -228,7 +230,7 @@ def send_tls_message(
         server.quit()
         print('Message successfully sent.')
     except Exception as e:
-        raise(e)
+        raise (e)
 
 
 def send_ssl_message(
@@ -247,7 +249,7 @@ def send_ssl_message(
             server.send_message(msg)
         print('Message successfully sent.')
     except Exception as e:
-        raise(e)
+        raise (e)
 
 
 def add_shipyard_link_to_message(message, shipyard_link):
@@ -292,18 +294,18 @@ def should_message_be_sent(
     if source_file_name_match_type == 'exact_match':
         if (
                 conditional_send == 'file_exists' and os.path.exists(
-                    source_full_path[0])) or (
+            source_full_path[0])) or (
                 conditional_send == 'file_dne' and not os.path.exists(
-                    source_full_path[0])) or (
+            source_full_path[0])) or (
                 conditional_send == 'always'):
             return True
         else:
             return False
     elif source_file_name_match_type == 'regex_match':
         if (
-            conditional_send == 'file_exists' and len(source_full_path) > 0) or (
+                conditional_send == 'file_exists' and len(source_full_path) > 0) or (
                 conditional_send == 'file_dne' and len(source_full_path) == 0) or (
-                    conditional_send == 'always'):
+                conditional_send == 'always'):
             return True
         else:
             return False
@@ -311,11 +313,11 @@ def should_message_be_sent(
 
 def main():
     args = get_args()
-    send_method = args.send_method
+    send_method = args.send_method.lower()
     smtp_host = args.smtp_host
     smtp_port = int(args.smtp_port)
     sender_address = args.sender_address
-    sender_name = args. sender_name
+    sender_name = args.sender_name
     to = args.to
     cc = args.cc
     bcc = args.bcc
@@ -349,7 +351,7 @@ def main():
         if _has_file(message):
             file = _extract_file(message)
             message = _read_file(file, message)
-        
+
         if include_shipyard_footer:
             shipyard_link = shipyard.args.create_shipyard_link()
             message = add_shipyard_link_to_message(
@@ -388,13 +390,17 @@ def main():
                 username=username,
                 password=password,
                 msg=msg)
-        else:
+        elif send_method == 'tls':
             send_tls_message(
                 smtp_host,
                 smtp_port=smtp_port,
                 username=username,
                 password=password,
                 msg=msg)
+        else:
+            raise ValueError(
+                f'Invalid send method: {send_method}. Must be either "ssl" or "tls".')
+        sys.exit(0)
     else:
         if conditional_send == 'file_exists':
             print('File(s) could not be found. Message not sent.')
